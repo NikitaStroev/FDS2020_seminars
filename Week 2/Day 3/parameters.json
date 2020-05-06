@@ -1,0 +1,17 @@
+{
+    "Data_folder": "result",
+    "Number_of_rows":"20000",
+    "URL": "https://storage.googleapis.com/dask-tutorial-data/nycflights.tar.gz",
+    "models": {
+        "RandomForest": [{
+            "n_estimators": [2,5,10],
+            "min_samples_split": [2, 5, 7],
+            "max_depth": [2,3,5]
+        }],
+        "XGBoost": [{
+            "max_depth": [3,7,8,10],
+            "n_estimators": [10, 20, 30, 40],
+            "learning_rate": [0.05, 0.1, 0.2, 0.5]
+        }]
+    }
+} 

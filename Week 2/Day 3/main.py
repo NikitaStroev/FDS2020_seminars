@@ -1,62 +1,54 @@
-from __future__ import print_function
+#!/usr/bin/env python
+import time
+import json
+import argparse
 
-import os
-import numpy as np
 import pandas as pd
-import tarfile
-import urllib.request
-import zipfile
-from glob import glob
+import numpy as np
 
-data_dir = 'data'
-
-
-def flights():
-    flights_raw = os.path.join(data_dir, 'nycflights.tar.gz')
-    flightdir = os.path.join(data_dir, 'nycflights')
-    jsondir = os.path.join(data_dir, 'flightjson')
-
-    if not os.path.exists(data_dir):
-        os.mkdir(data_dir)
-
-    if not os.path.exists(flights_raw):
-        print("- Downloading NYC Flights dataset... ", end='', flush=True)
-        url = "https://storage.googleapis.com/dask-tutorial-data/nycflights.tar.gz"
-        urllib.request.urlretrieve(url, flights_raw)
-        print("done", flush=True)
-
-    if not os.path.exists(flightdir):
-        print("- Extracting flight data... ", end='', flush=True)
-        tar_path = os.path.join('data', 'nycflights.tar.gz')
-        with tarfile.open(tar_path, mode='r:gz') as flights:
-            flights.extractall('data/')
-        print("done", flush=True)
-
-    if not os.path.exists(jsondir):
-        print("- Creating json data... ", end='', flush=True)
-        os.mkdir(jsondir)
-        for path in glob(os.path.join('data', 'nycflights', '*.csv')):
-            prefix = os.path.splitext(os.path.basename(path))[0]
-            # Just take the first 10000 rows for the demo
-            df = pd.read_csv(path).iloc[:10000]
-            df.to_json(os.path.join('data', 'flightjson', prefix + '.json'),
-                       orient='records', lines=True)
-        print("done", flush=True)
-
-    print("** Finished! **")
-
+from load import Flights
+from methods import Dask_XGB, Dask_RandomForest, Dataframe_NYC
 
 
 def main():
-    print("Setting up data directory")
-    print("-------------------------")
+    pass
+    #Parser block
+    parser = argparse.ArgumentParser(description='Args parser')
+    parser.add_argument('--parameters', default='parameters.json', dest='config', type=str) #parameters_trial.json #testing set of parameters
+    parser.add_argument('--test_size', default=0.3, dest='test_size', action='store', type=float)
+    parser.add_argument('--results_path', default='results.csv', dest='results_path', type=str)
 
-    flights()
-    random_array()
-    weather()
+    args = parser.parse_args()
+    test_size = args.test_size
+    result_csv = str(args.results_path)
+    
+    with open(args.config) as json_file:
+        parameters = json.load(json_file)
+    data_dir = parameters['Data_folder']
+    url = parameters['URL']
+    number_of_rows = parameters['Number_of_rows']
 
-    print('Finished!')
+    #Load and preprocessing
+    Flights(data_dir, url, number_of_rows)
+    pd_df = Dataframe_NYC.Data_prep()
+    X_train, X_test, y_train, y_test = Dataframe_NYC.split_train_test(pd_df, test_size, random_state=42)
+    print('** Preprocessing finished! **')
 
+    # Setting output file
+    result_df = pd.DataFrame(columns=['Time spent','MSE', 'R_2'], index=['DASK_RandomForest', 'DASK_ML_XGBoost'])
+    
+    acc_r2, acc_mse, train_time = Dask_RandomForest.training((parameters['models']['RandomForest'][0]), X_train, X_test, y_train, y_test)
+    result_df.iloc[0] = train_time, acc_mse, acc_r2
+    print('** DASK_ML_RandomForest finished! **')
+
+    acc_mse, train_time = Dask_XGB.boosting(X_train, X_test, y_train, y_test)
+    result_df.iloc[1] = train_time, acc_mse, 0.
+    print('** DASK_ML_XGBoost finished! **')
+
+    result_df = result_df.round(2)
+    pd.DataFrame.to_csv(result_df, result_csv, sep=',')
+    print('** Saving results finished! **')
 
 if __name__ == '__main__':
-    main()
+
+    main()   
